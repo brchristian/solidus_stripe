@@ -106,20 +106,24 @@ module Spree
 
         # Create new Stripe card / payment method and attach to
         # (new or existing) Stripe customer
-        if source.gateway_payment_profile_id&.starts_with?('pm_')
-          stripe_payment_method = Stripe::PaymentMethod.attach(source.gateway_payment_profile_id, customer: stripe_customer)
-          source.update!(
+        begin
+          if source.gateway_payment_profile_id&.starts_with?('pm_')
+            stripe_payment_method = Stripe::PaymentMethod.attach(source.gateway_payment_profile_id, customer: stripe_customer)
+            source.update!(
             cc_type: stripe_payment_method.card.brand,
             gateway_customer_profile_id: stripe_customer.id,
             gateway_payment_profile_id: stripe_payment_method.id
-          )
-        elsif source.gateway_payment_profile_id&.starts_with?('tok_')
-          stripe_card = Stripe::Customer.create_source(stripe_customer.id, source: source.gateway_payment_profile_id)
-          source.update!(
+            )
+          elsif source.gateway_payment_profile_id&.starts_with?('tok_')
+            stripe_card = Stripe::Customer.create_source(stripe_customer.id, source: source.gateway_payment_profile_id)
+            source.update!(
             cc_type: stripe_card.brand,
             gateway_customer_profile_id: stripe_customer.id,
             gateway_payment_profile_id: stripe_card.id
-          )
+            )
+          end
+        rescue Stripe::CardError => error
+          payment.send(:gateway_error, error.message)
         end
       end
 
